@@ -5,5 +5,5 @@
  * Leave it empty and the page runs in demo mode (nothing is saved).
  */
 window.ICF9_CONFIG = {
-  apiUrl: ""
+  apiUrl: "https://script.google.com/macros/s/AKfycbyTf5DV5E7uejjU5_UmcNV8BQBH4649lob26WVei22ycblmobv50v-FfEw2fTJZR7utug/exec"
 };
