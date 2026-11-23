@@ -16,15 +16,45 @@ const C = { ID:0, TS:1, NAME:2, EMAIL:3, PHONE:4, COMM:5, OTHER:6, PERSONS:7, GR
 const ATT_SHEET = 'Attendees';   // one row per person: Reg ID, No., Name, Phone
 const ID_PREFIX = 'ICF9-';
 const MAX_PERSONS = 9;
-const DEFAULTS = { CAPACITY: '500', REG_OPEN: 'true', EVENT_TIME: '', SEND_EMAIL: 'true', POSTER_URL: '' };
+const DEFAULTS = { CAPACITY: '500', REG_OPEN: 'true', SEND_EMAIL: 'true' };
+const EVENT = {
+  name: '9th International Cultural Festival, Bangkok',
+  date: 'Sunday, 17 January 2027',
+  time: '2:00 PM (14:00 hrs)',
+  venue: "King Mongkut's University of Technology North Bangkok (KMUTNB)",
+  venueTh: 'มหาวิทยาลัยเทคโนโลยีพระจอมเกล้าพระนครเหนือ',
+  map: 'https://maps.app.goo.gl/3GUiEf4jivWenQwt6',
+  phone: '+66 89 901 2366',
+  email: 'internationalculturalexchangeb@gmail.com'
+};
 const SETTING_KEYS = Object.keys(DEFAULTS);
 const SESSION_SECONDS = 6 * 60 * 60;
 
 /* ---------------- web app entry ---------------- */
 function doGet() {
   return HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle('9th International Cultural Festival Thailand · Registration')
+    .setTitle(EVENT.name + ' · Registration')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+/* ---------------- JSON API (used when the page is hosted on GitHub Pages) ----------------
+   The page POSTs {fn, args} as text/plain (no CORS preflight); only the functions below can be called. */
+function doPost(e) {
+  const allowed = {
+    getPublicInfo: getPublicInfo, register: register,
+    adminLogin: adminLogin, adminLogout: adminLogout, adminGetData: adminGetData,
+    adminSetCheckIn: adminSetCheckIn, adminDelete: adminDelete, adminSaveSettings: adminSaveSettings
+  };
+  let out;
+  try {
+    const req = JSON.parse((e && e.postData && e.postData.contents) || '{}');
+    const fn = Object.prototype.hasOwnProperty.call(allowed, req.fn) ? allowed[req.fn] : null;
+    if (!fn) throw new Error('Unknown function');
+    out = { result: fn.apply(null, Array.isArray(req.args) ? req.args.slice(0, 4) : []) };
+  } catch (err) {
+    out = { error: String((err && err.message) || err) };
+  }
+  return ContentService.createTextOutput(JSON.stringify(out)).setMimeType(ContentService.MimeType.JSON);
 }
 
 /* ---------------- one-time setup ---------------- */
@@ -73,7 +103,6 @@ function getAttSheet_() {
   }
   return sh;
 }
-function normName_(s) { return String(s).toLowerCase().normalize('NFKC').replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim(); }
 // "1) Name — 0812345678" per line  <->  [{name, phone}]
 function attToText_(list) { return list.map((a, i) => (i + 1) + ') ' + a.name + ' — ' + a.phone).join('\n'); }
 function attFromText_(txt) {
@@ -117,7 +146,7 @@ function usedSeats_(rows) { return rows.reduce((a, r) => a + (Number(r[C.PERSONS
 function getPublicInfo() {
   const s = settings_();
   return {
-    settings: { CAPACITY: s.CAPACITY, REG_OPEN: s.REG_OPEN, EVENT_TIME: s.EVENT_TIME, POSTER_URL: s.POSTER_URL },
+    settings: { CAPACITY: s.CAPACITY, REG_OPEN: s.REG_OPEN },
     used: usedSeats_(allRows_())
   };
 }
@@ -147,9 +176,6 @@ function register(f) {
     const d = digits_(attendees[i].phone);
     if (!attendees[i].name || d.length < 9 || d.length > 15) return { ok: false, code: 'invalid', message: 'Please enter name and phone for person ' + (i + 1) };
   }
-  const keys = attendees.map(a => normName_(a.name));
-  const dupIn = attendees.filter((a, i) => keys.indexOf(keys[i]) !== i).map(a => a.name);
-  if (dupIn.length) return { ok: false, code: 'dupName', names: dupIn };
 
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(20000)) return { ok: false, code: 'busy', message: 'System busy, please try again' };
@@ -161,11 +187,6 @@ function register(f) {
     if (rows.some(r => String(r[C.EMAIL]).toLowerCase() === email || digits_(r[C.PHONE]) === pd)) {
       return { ok: false, code: 'duplicate' };
     }
-    // name already registered in another booking?
-    const taken = {};
-    rows.forEach(r => (r[C.ATT] ? attFromText_(r[C.ATT]) : [{ name: r[C.NAME] }]).forEach(a => taken[normName_(a.name)] = true));
-    const clash = attendees.filter(a => taken[normName_(a.name)]).map(a => a.name);
-    if (clash.length) return { ok: false, code: 'dupName', names: clash };
     const cap = parseInt(s.CAPACITY, 10) || 0;
     const used = usedSeats_(rows);
     if (cap > 0 && used + persons > cap) return { ok: false, code: 'full', remaining: Math.max(0, cap - used) };
@@ -196,17 +217,22 @@ function sendConfirmation_(to, r, s) {
     const html =
       '<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;border:2px solid #b07d22;border-radius:14px;overflow:hidden">' +
       '<div style="background:#1c2766;color:#fff;padding:16px;text-align:center"><div style="color:#e3c271;font-size:12px;letter-spacing:2px">ADMISSION TICKET · บัตรเข้างาน</div>' +
-      '<div style="font-size:20px;font-weight:bold">9th International Cultural Festival Thailand</div></div>' +
+      '<div style="font-size:20px;font-weight:bold">' + EVENT.name + '</div></div>' +
       '<div style="padding:18px;text-align:center;background:#fffaf0">' +
-      '<p>Dear ' + e(r.name) + ',<br>Thank you for registering. Please show this ticket at the entrance.</p>' +
+      '<p>Dear ' + e(r.name) + ',<br>Thank you for registering. Please show this ticket (or your registration ID) at the entrance.</p>' +
       '<div style="font-size:28px;font-weight:bold;color:#a3222b">' + e(r.id) + '</div>' +
       '<img src="' + qr + '" width="180" height="180" alt="QR" style="margin:10px 0">' +
       '<p style="margin:4px 0">Persons: <b>' + e(r.persons) + '</b> · Community: <b>' + e(r.community) + '</b>' + (r.group ? ' · Group: <b>' + e(r.group) + '</b>' : '') + '</p>' +
       (r.attendees.length > 1 ? '<ol style="text-align:left;display:inline-block;margin:6px 0">' + r.attendees.map(a => '<li>' + e(a.name) + ' <span style="color:#6f6556">' + e(a.phone) + '</span></li>').join('') + '</ol>' : '') +
-      '<p style="color:#6f6556;font-size:13px">Grand Performance by Team Shivapriya<br>17 January 2027' + (s.EVENT_TIME ? ' · ' + e(s.EVENT_TIME) : '') +
-      '<br>King Mongkut\'s University Auditorium, North Bangkok<br>Entry is FREE</p></div></div>';
-    MailApp.sendEmail({ to: to, subject: 'Your registration ' + r.id + ' – 9th International Cultural Festival Thailand',
-      htmlBody: html, name: 'Chirantana Academy × KMUTNB' });
+      '<table style="margin:12px auto 0;font-size:14px;text-align:left;border-collapse:collapse">' +
+      '<tr><td style="color:#6f6556;padding:3px 10px">Date</td><td><b>' + EVENT.date + '</b></td></tr>' +
+      '<tr><td style="color:#6f6556;padding:3px 10px">Time</td><td><b>' + EVENT.time + '</b></td></tr>' +
+      '<tr><td style="color:#6f6556;padding:3px 10px">Venue</td><td><b>' + EVENT.venue + '</b><br>' + EVENT.venueTh + '<br><a href="' + EVENT.map + '">Get directions (Google Maps)</a></td></tr>' +
+      '<tr><td style="color:#6f6556;padding:3px 10px">Entry</td><td><b>FREE</b> · Basic refreshments provided</td></tr></table>' +
+      '<p style="color:#6f6556;font-size:13px;margin-top:14px">Grand performance by Team Shivapriya, under the guidance of Karnataka Kalashree Dr. Sanjay Shantaram<br>' +
+      'Questions? ' + EVENT.phone + ' (phone / WhatsApp) · ' + EVENT.email + '</p></div></div>';
+    MailApp.sendEmail({ to: to, subject: 'Your registration ' + r.id + ' – ' + EVENT.name, replyTo: EVENT.email,
+      htmlBody: html, name: 'Chirantana Academy in Association with KMUTNB' });
   } catch (err) {
     console.warn('Email failed: ' + err);
   }
@@ -282,9 +308,7 @@ function adminSaveSettings(token, s) {
   const out = {
     CAPACITY: String(Math.max(0, parseInt(s.CAPACITY, 10) || 0)),
     REG_OPEN: String(s.REG_OPEN) === 'true' ? 'true' : 'false',
-    EVENT_TIME: clean_(s.EVENT_TIME, 80),
-    SEND_EMAIL: String(s.SEND_EMAIL) === 'true' ? 'true' : 'false',
-    POSTER_URL: /^https:\/\//.test(String(s.POSTER_URL || '')) ? clean_(s.POSTER_URL, 500) : ''
+    SEND_EMAIL: String(s.SEND_EMAIL) === 'true' ? 'true' : 'false'
   };
   props.setProperties(out);
   return { ok: true, settings: settings_() };
