@@ -1,39 +1,30 @@
-# 9th International Cultural Festival, Bangkok — Registration
+# 9th International Cultural Festival, Bangkok Thailand — Registration
 
-Registration website for the **9th International Cultural Festival, Bangkok**
-— Chirantana Academy in Association with KMUTNB.
-**Sunday 17 January 2027 · 2:00 PM · King Mongkut's University of Technology North Bangkok (KMUTNB)** · Entry FREE
+Registration website for the **9th International Cultural Festival, Bangkok Thailand**
+— Chirantana Academy in Association with King Mongkut's University of Technology North Bangkok.
+**Sunday 17 January 2027 · 2:00 PM · KMUTNB, Bangkok** · Entry FREE
 
-- **Front end:** `index.html`, hosted on **GitHub Pages**
-- **Back end:** Google Apps Script (`Code.gs`) + a Google Sheet that stores every registration
+- **Front end:** `index.html` + `config.js` on **GitHub Pages**
+- **Back end:** Google Apps Script (`Code.gs`) + Google Sheet
 
 ## Features
-**Public page:** event details (date, time, venue + map, contact), programme highlights, poster, EN / ไทย, mobile-friendly
-· registration form with one name + phone row per person (1–9), duplicate registrant email / phone check
-· seat capacity with auto-close · ticket with ID + QR code · confirmation email
+- Event details, programme highlights, venue map and contact info; poster slideshow (up to 3 images, managed in the admin panel); EN / ไทย; mobile-friendly
+- Registration with one name + phone row per person (1–9), capacity control, ticket with an on-device QR code, confirmation email
+- Admin panel (☰ top-right, English / ไทย): dashboard, list, search, check-in, Excel / PDF / CSV export, slideshow images, settings
 
-**Admin** (☰ menu, top-right, password protected): dashboard, registration list (search, filter, check-in, delete, CSV export), on-site check-in, settings.
+## Security
+- No secrets in the web page: the admin password is stored server-side as a salted SHA-256 hash; nothing sensitive is visible via "view source"
+- Admins change their own password in the admin panel (current password required, strength rules, all other sessions signed out); `resetAdminPassword()` for recovery
+- Allow-listed API functions only; admin-only functions require a session token (30-min idle timeout)
+- Login lockout (5 failures → 15 min), bot honeypot, registration rate limit, request size limit
+- Content-Security-Policy, anti-framing, formula-injection protection for Sheets/CSV, HTML escaping of all data
 
-## Files
-| File | Purpose |
-|---|---|
-| `index.html` | The website (registration page + admin panel) |
-| `config.js` | Where you paste the Apps Script Web app URL |
-| `Code.gs` | Apps Script back end — paste into the Google Sheet's Apps Script editor |
-| `INSTALL-TH.md` | Step-by-step guide in Thai |
+## Privacy (Thailand PDPA)
+- Bilingual Privacy Notice; separate consents (own data, other attendees) recorded with notice version and timestamp
+- Data minimisation, no third-party QR/tracking, 90-day retention with `purgeAllPersonalData()`
 
-## Setup (about 15 minutes)
-### 1. Back end — Google Sheet + Apps Script
-1. Create a Google Sheet → **Extensions → Apps Script**
-2. Replace the code in `Code.gs` with this repo's `Code.gs`
-3. Add an HTML file named `Index` and paste `index.html` into it (lets the app also run directly from Apps Script)
-4. Run `setup()` once and allow permissions → the initial **admin password** is printed in the Execution log
-5. **Deploy → New deployment → Web app** · Execute as: **Me** · Who has access: **Anyone** → copy the **Web app URL**
-
-### 2. Front end — GitHub Pages
-1. Edit `config.js` on GitHub and paste the Web app URL into `apiUrl`
-2. **Settings → Pages** · Source: *Deploy from a branch* · Branch: `main` / `(root)` → Save
-3. The site goes live at `https://<username>.github.io/cultural-festival-registration/`
-
-> After changing `Code.gs`, redeploy with **Manage deployments → ✏️ → Version: New version** so the URL stays the same.
-> Change the admin password in Apps Script → *Project Settings → Script properties → `ADMIN_PASSWORD`*.
+## Setup
+See **[INSTALL-TH.md](INSTALL-TH.md)** (Thai). In short:
+1. Google Sheet → Extensions → Apps Script → paste `Code.gs` → run `setup()` then `resetAdminPassword()` (password appears in the Execution log)
+2. Deploy → Web app (Execute as *Me*, access *Anyone*) → paste the `/exec` URL into `config.js`
+3. Settings → Pages → `main` / root
